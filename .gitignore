@@ -1,4 +1,27 @@
+# Dependencies
 node_modules/
+
+# Production build
 dist/
+
+# Environment
 .env
-.env.local
+.env.*
+!.env.example
+
+# Logs
+*.log
+*.err.log
+
+# Debug / Temporary
+build_err.txt
+TMP_*
+tsc_admin_diag.txt
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
