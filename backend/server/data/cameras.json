@@ -1,0 +1,11 @@
+[
+  {
+    "id": "cam_192-168-1-8-8080",
+    "name": "phone",
+    "ip": "192.168.1.8:8080",
+    "streamUrl": "http://192.168.1.8:8080/stream",
+    "snapshotUrl": "http://192.168.1.8:8080/shot.jpg",
+    "status": "offline",
+    "lastUpdated": "2026-06-29T09:58:18.394Z"
+  }
+]

@@ -5,7 +5,9 @@ import { handleAlertRoutes } from './routes/alerts.mjs'
 import { handleCoreRoutes } from './routes/core.mjs'
 import { handleAccessLogRoutes } from './routes/accessLogs.mjs'
 import { handleSecurityRoutes } from './routes/security.mjs'
+import { handleCameraRoutes } from './routes/camera.mjs'
 import { notFound, send } from './utils/http.mjs'
+
 
 
 
@@ -24,7 +26,9 @@ export const routeRequest = async (req, res) => {
   if (await handleAccessLogRoutes(routeContext)) return
   if (await handleAlertRoutes(routeContext)) return
   if (await handleSecurityRoutes(routeContext)) return
+  if (await handleCameraRoutes(routeContext)) return
   if (await handleCoreRoutes(routeContext)) return
+
 
 
 

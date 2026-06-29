@@ -36,19 +36,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const nextToken = localStorage.getItem('token')
     const nextUserRaw = localStorage.getItem('user')
 
-    console.log('AUTH HYDRATED: syncFromLocalStorage()')
+    let nextUser: User | null = null
+    if (nextUserRaw) {
+      try {
+        nextUser = JSON.parse(nextUserRaw) as User
+      } catch {
+        // If stored user is corrupted, treat as logged out.
+        nextUser = null
+        localStorage.removeItem('user')
+      }
+    }
+
+    // If either token or user is missing, treat as logged out.
+    if (!nextToken || !nextUser) {
+      setToken(null)
+      setUser(null)
+      if (!nextToken) localStorage.removeItem('token')
+      if (!nextUser) localStorage.removeItem('user')
+      return
+    }
+
     setToken(nextToken)
-    setUser(nextUserRaw ? (JSON.parse(nextUserRaw) as User) : null)
-    console.log('TOKEN STATE:', nextToken)
-    console.log('USER STATE:', nextUserRaw ? (JSON.parse(nextUserRaw) as User) : null)
+    setUser(nextUser)
   }, [])
 
+
+
   useEffect(() => {
+    // Hydrate once on mount from localStorage.
     syncFromLocalStorage()
   }, [syncFromLocalStorage])
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
   const login = useCallback(async (email: string, password: string) => {
     setIsLoading(true)
@@ -122,12 +142,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         const requestPayload = { name, email, password, role }
-        console.log('REGISTER REQUEST PAYLOAD (frontend):', requestPayload)
 
         const data = (await response.json()) as { otpToken: string; email: string; expiresIn: number }
-        console.log('REGISTER RESPONSE (frontend):', data)
 
         localStorage.setItem('pendingAuthEmail', data.email)
+
         localStorage.setItem('pendingAuthOtpToken', data.otpToken)
         localStorage.setItem('pendingAuthOtpExpiresIn', String(data.expiresIn))
         return data
@@ -171,14 +190,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           body: JSON.stringify({ email, otpToken, otp }),
         })
 
-        console.log('VERIFY RESPONSE STATUS:', response.status)
-
         if (!response.ok) throw new Error('Invalid OTP')
 
         const data = (await response.json()) as { token: string; user: User }
-        console.log('VERIFY RESPONSE DATA:', data)
 
         setToken(data.token)
+
         setUser(data.user)
         localStorage.setItem('token', data.token)
         localStorage.setItem('user', JSON.stringify(data.user))
