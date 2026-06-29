@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "main": "backend/server/index.mjs",
   "scripts": {
-    "start": "node backend/server/index.mjs"
+    "start": "node server/index.mjs"
   },
   "dependencies": {}
 }
