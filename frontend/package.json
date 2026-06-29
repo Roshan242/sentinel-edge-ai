@@ -12,8 +12,12 @@
     "react-dom": "^18.x"
   },
   "devDependencies": {
-    "vite": "^5.x",
+    "@tailwindcss/forms": "^0.5.11",
     "@vitejs/plugin-react": "^4.x",
-    "typescript": "^5.x"
+    "autoprefixer": "^10.5.2",
+    "postcss": "^8.5.16",
+    "tailwindcss": "^4.3.1",
+    "typescript": "^5.x",
+    "vite": "^5.x"
   }
 }
