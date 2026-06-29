@@ -2,7 +2,7 @@
   "name": "sentinel-backend",
   "type": "module",
   "version": "1.0.0",
-  "main": "backend/server/index.mjs",
+  "main": "server/index.mjs",
   "scripts": {
     "start": "node server/index.mjs"
   },
