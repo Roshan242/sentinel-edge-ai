@@ -1,5 +1,12 @@
 {
   "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
+    {
+      "source": "/api/:path*",
+      "destination": "https://sentinel-edge-ai.onrender.com/api/:path*"
+    },
+    {
+      "source": "/:path*",
+      "destination": "/"
+    }
   ]
 }
