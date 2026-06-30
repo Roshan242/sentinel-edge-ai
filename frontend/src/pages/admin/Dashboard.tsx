@@ -467,9 +467,10 @@ export const AdminDashboard: React.FC = () => {
 
 
   const recentAlerts = useMemo(() => {
-    return alerts
+    const safeAlerts = Array.isArray(alerts) ? alerts : []
+    return safeAlerts
       .slice()
-      .sort((x, y) => new Date(y.timestamp).getTime() - new Date(x.timestamp).getTime())
+      .sort((x, y) => new Date(String(y?.timestamp ?? '')).getTime() - new Date(String(x?.timestamp ?? '')).getTime())
       .slice(0, 5)
       .map((a, i) => {
         const isCritical = a.severity === 'critical' || a.severity === 'error'
@@ -492,15 +493,16 @@ export const AdminDashboard: React.FC = () => {
   }, [alerts])
 
 
-  const normalizedLogs = Array.isArray(logs) ? logs : []
+  const normalizedLogs = (logs ?? []) as LogItem[]
 
   console.log('logs state:', logs)
   console.log('isArray:', Array.isArray(logs))
 
   const accessLogs = useMemo(() => {
-    return normalizedLogs
+    const safeLogs = Array.isArray(normalizedLogs) ? normalizedLogs : []
+    return safeLogs
       .slice()
-      .sort((x, y) => new Date(y.timestamp).getTime() - new Date(x.timestamp).getTime())
+      .sort((x, y) => new Date(String(y?.timestamp ?? '')).getTime() - new Date(String(x?.timestamp ?? '')).getTime())
       .slice(0, 5)
       .map((l) => ({
         // adminService.LogItem shape: { userId, name, email, action, status, timestamp }
