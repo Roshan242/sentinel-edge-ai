@@ -386,10 +386,11 @@ export const AdminDashboard: React.FC = () => {
     const load = async () => {
       try {
         const [a, response] = await Promise.all([getAlerts(), getLogs()])
-        console.log('access logs response:', response)
+
         if (!mounted) return
-        setAlerts(a)
-        setLogs(response)
+        setAlerts(a as any)
+        setLogs(response as any)
+
       } catch (e) {
         console.error(e)
         toast.error('Failed to load dashboard data')
@@ -495,8 +496,7 @@ export const AdminDashboard: React.FC = () => {
 
   const normalizedLogs = (logs ?? []) as LogItem[]
 
-  console.log('logs state:', logs)
-  console.log('isArray:', Array.isArray(logs))
+
 
   const accessLogs = useMemo(() => {
     const safeLogs = Array.isArray(normalizedLogs) ? normalizedLogs : []
@@ -516,20 +516,26 @@ export const AdminDashboard: React.FC = () => {
   }, [logs])
 
   const derived = useMemo(() => {
-    const activeAlerts = alerts.filter((a) => ['critical', 'error', 'warning'].includes(a.severity)).length
-    const successLogs = normalizedLogs.filter((l) => l.status === 'success').length
-    const failedLogs = normalizedLogs.filter((l) => l.status !== 'success').length
-    const totalLogs = normalizedLogs.length
+    const safeAlerts = Array.isArray(alerts) ? alerts : []
+    const safeLogs = Array.isArray(normalizedLogs) ? normalizedLogs : []
+
+    const activeAlerts = safeAlerts.filter((a) => ['critical', 'error', 'warning'].includes(a.severity)).length
+
+    const successLogs = safeLogs.filter((l) => l.status === 'success').length
+    const failedLogs = safeLogs.filter((l) => l.status !== 'success').length
+    const totalLogs = safeLogs.length
     const successRate = totalLogs ? Math.round((successLogs / totalLogs) * 100) : 0
 
     // For chart widgets (use the latest 5 for density but keep counts accurate)
-    const recentSuccess = accessLogs.filter((l) => !l.failed).length
-    const recentFailed = accessLogs.filter((l) => l.failed).length
+    const safeAccessLogs = Array.isArray(accessLogs) ? accessLogs : []
+    const recentSuccess = safeAccessLogs.filter((l) => !l.failed).length
+    const recentFailed = safeAccessLogs.filter((l) => l.failed).length
 
-    const unreadAlerts = alerts.filter((a: any) => a?.read !== true).length
+    const unreadAlerts = safeAlerts.filter((a: any) => a?.read !== true).length
 
     return { activeAlerts, unreadAlerts, successRate, successLogs, failedLogs, recentSuccess, recentFailed }
   }, [alerts, normalizedLogs, accessLogs])
+
 
   const intrusionData = useMemo(() => {
     // Density based chart from recent alerts (no mock data)
