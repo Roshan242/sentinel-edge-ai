@@ -56,9 +56,19 @@ const ProtectedRoute: React.FC<{
     )
   }
 
+  // Avoid redirect loops while localStorage token is present but user state is still syncing.
+  // If token exists, allow route render and let ProtectedRoute role check handle mismatch.
   if (!isAuthenticated) {
+    // If we still have a token in storage, do not bounce to /login.
+    // Instead allow render; role mismatch will be handled after sync.
+    if (token) {
+      return <>{children}</>
+    }
     return <Navigate to="/login" replace />
   }
+
+
+
 
   if (requiredRole && user?.role !== requiredRole) {
     return <Navigate to="/" replace />

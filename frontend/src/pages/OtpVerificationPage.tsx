@@ -113,14 +113,16 @@ export const OtpVerificationPage: React.FC = () => {
   const goToRoleDashboard = (fallbackRole?: 'admin' | 'user') => {
     const storedUser = localStorage.getItem('user')
     if (storedUser) {
-      const u = JSON.parse(storedUser) as { role: string }
-      navigate(u.role === 'admin' ? '/admin/dashboard' : '/user/dashboard')
+      const u = JSON.parse(storedUser) as { role?: string }
+      const role = u.role === 'admin' ? 'admin' : 'user'
+      navigate(role === 'admin' ? '/admin/dashboard' : '/user/dashboard', { replace: true })
       return
     }
 
-    const role = fallbackRole ?? state.role
-    navigate(role === 'admin' ? '/admin/dashboard' : '/user/dashboard')
+    const role = fallbackRole ?? state.role ?? 'user'
+    navigate(role === 'admin' ? '/admin/dashboard' : '/user/dashboard', { replace: true })
   }
+
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault()

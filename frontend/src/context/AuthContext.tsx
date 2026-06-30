@@ -36,36 +36,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const nextToken = localStorage.getItem('token')
     const nextUserRaw = localStorage.getItem('user')
 
-    let nextUser: User | null = null
-    if (nextUserRaw) {
-      try {
-        nextUser = JSON.parse(nextUserRaw) as User
-      } catch {
-        // If stored user is corrupted, treat as logged out.
-        nextUser = null
-        localStorage.removeItem('user')
-      }
-    }
+    console.log('[AuthContext] syncFromLocalStorage', {
+      tokenPresent: !!nextToken,
+      userRawPresent: !!nextUserRaw,
+    })
 
-    // If either token or user is missing, treat as logged out.
-    if (!nextToken || !nextUser) {
+    // Allow token to exist even if user parsing is temporarily stale.
+    // ProtectedRoute should not redirect to /login during that window.
+    if (!nextToken) {
+      // Important: if token missing, we are truly logged out.
       setToken(null)
       setUser(null)
-      if (!nextToken) localStorage.removeItem('token')
-      if (!nextUser) localStorage.removeItem('user')
+      if (nextUserRaw) localStorage.removeItem('user')
       return
+    }
+
+    if (!nextUserRaw) {
+      // Token exists but user missing -> treat as logged out and clear token.
+      setToken(null)
+      setUser(null)
+      localStorage.removeItem('token')
+      return
+    }
+
+
+    let nextUser: User | null = null
+    try {
+      nextUser = JSON.parse(nextUserRaw) as User
+    } catch {
+      nextUser = null
+      localStorage.removeItem('user')
     }
 
     setToken(nextToken)
     setUser(nextUser)
+    console.log('[AuthContext] syncFromLocalStorage applied', {
+      tokenPresentAfter: !!nextToken,
+      role: (nextUser as any)?.role ?? null,
+    })
   }, [])
+
+
 
 
 
   useEffect(() => {
     // Hydrate once on mount from localStorage.
+    console.log('[AuthContext] mount hydrate; raw:', {
+      token: localStorage.getItem('token'),
+      userRawPresent: !!localStorage.getItem('user'),
+    })
     syncFromLocalStorage()
   }, [syncFromLocalStorage])
+
 
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -92,15 +115,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return data
       }
 
-      // password-only login
+        // password-only login
       if ('token' in data) {
+        console.log('[AuthContext] login success set token/user', {
+          token: data.token,
+          userRole: (data.user as any)?.role,
+        })
         setToken(data.token)
         setUser(data.user)
         localStorage.setItem('token', data.token)
         localStorage.setItem('user', JSON.stringify(data.user))
+        console.log('[AuthContext] login success localStorage now', {
+          token: localStorage.getItem('token'),
+          userRawPresent: !!localStorage.getItem('user'),
+        })
       }
 
       return undefined
+
     } finally {
       setIsLoading(false)
     }
