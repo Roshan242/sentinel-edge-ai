@@ -388,8 +388,9 @@ export const AdminDashboard: React.FC = () => {
         const [a, response] = await Promise.all([getAlerts(), getLogs()])
 
         if (!mounted) return
-        setAlerts(a as any)
-        setLogs(response as any)
+        setAlerts(Array.isArray(a) ? (a as any) : [])
+        setLogs(Array.isArray(response) ? (response as any) : [])
+
 
       } catch (e) {
         console.error(e)
@@ -518,6 +519,7 @@ export const AdminDashboard: React.FC = () => {
   const derived = useMemo(() => {
     const safeAlerts = Array.isArray(alerts) ? alerts : []
     const safeLogs = Array.isArray(normalizedLogs) ? normalizedLogs : []
+
 
     const activeAlerts = safeAlerts.filter((a) => ['critical', 'error', 'warning'].includes(a.severity)).length
 

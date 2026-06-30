@@ -32,10 +32,23 @@ export interface LogItem {
   timestamp: string
 }
 
-export const getAccessLogs = async (): Promise<LogItem[]> => {
-  const response = await apiClient.get<LogItem[]>('/access-logs')
-  return response.data
+const unwrapArray = <T,>(payload: any): T[] => {
+  if (Array.isArray(payload)) return payload as T[]
+  if (payload && typeof payload === 'object') {
+    // { success: true, data: [...] }
+    if (Array.isArray(payload.data)) return payload.data as T[]
+    // { data: [...] } or { alerts: [...] } / { logs: [...] }
+    if (Array.isArray((payload as any).alerts)) return (payload as any).alerts as T[]
+    if (Array.isArray((payload as any).logs)) return (payload as any).logs as T[]
+  }
+  return []
 }
+
+export const getAccessLogs = async (): Promise<LogItem[]> => {
+  const response = await apiClient.get<any>('/access-logs')
+  return unwrapArray<LogItem>(response.data)
+}
+
 
 
 export interface SettingsData {
@@ -49,9 +62,10 @@ export interface SettingsData {
 }
 
 export const getUsers = async (): Promise<UserItem[]> => {
-  const response = await apiClient.get<UserItem[]>('/admin/users')
-  return response.data
+  const response = await apiClient.get<any>('/admin/users')
+  return unwrapArray<UserItem>(response.data)
 }
+
 
 export interface CreateUserPayload {
   name: string
@@ -75,29 +89,15 @@ export const deleteUser = async (id: number): Promise<void> => {
 }
 
 const normalizeArrayResponse = <T,>(data: unknown): T[] => {
-  if (Array.isArray(data)) return data as T[]
-
-  if (data && typeof data === 'object') {
-    const obj = data as Record<string, unknown>
-
-    // common shapes: { alerts: [] }, { logs: [] }, { data: [] }
-    const maybeAlerts = obj.alerts
-    if (Array.isArray(maybeAlerts)) return maybeAlerts as T[]
-
-    const maybeLogs = obj.logs
-    if (Array.isArray(maybeLogs)) return maybeLogs as T[]
-
-    const maybeData = obj.data
-    if (Array.isArray(maybeData)) return maybeData as T[]
-  }
-
-  return []
+  return unwrapArray<T>(data)
 }
+
 
 export const getAlerts = async (): Promise<AlertItem[]> => {
-  const response = await apiClient.get<unknown>('/admin/alerts')
+  const response = await apiClient.get<any>('/admin/alerts')
   return normalizeArrayResponse<AlertItem>(response.data)
 }
+
 
 
 export const deleteAlert = async (id: number): Promise<void> => {
@@ -105,9 +105,10 @@ export const deleteAlert = async (id: number): Promise<void> => {
 }
 
 export const getLogs = async (): Promise<LogItem[]> => {
-  const response = await apiClient.get<unknown>('/admin/logs')
+  const response = await apiClient.get<any>('/admin/logs')
   return normalizeArrayResponse<LogItem>(response.data)
 }
+
 
 
 export const getSettings = async (): Promise<SettingsData> => {

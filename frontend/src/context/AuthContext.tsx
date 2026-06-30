@@ -91,9 +91,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+  const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '/api'
 
   const login = useCallback(async (email: string, password: string) => {
+
     setIsLoading(true)
     try {
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
