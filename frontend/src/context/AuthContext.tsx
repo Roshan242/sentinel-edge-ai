@@ -173,9 +173,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           throw new Error(text || 'Registration failed')
         }
 
-        const requestPayload = { name, email, password, role }
-
         const data = (await response.json()) as { otpToken: string; email: string; expiresIn: number }
+
 
         localStorage.setItem('pendingAuthEmail', data.email)
 
