@@ -173,6 +173,7 @@ export const handleAuthRoutes = async ({ req, res, method, path }) => {
 
 
   if (method === 'POST' && path === '/auth/register') {
+    console.log("REGISTER API CALLED");
     const body = await readBody(req)
 
     if (!body?.name || !body?.email || !body?.password) {
