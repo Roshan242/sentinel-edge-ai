@@ -1,14 +1,18 @@
 # TODO
 
-- [x] Update `frontend/src/services/adminService.ts` to normalize `getAlerts()` and `getLogs()` responses into arrays (handle `{ alerts: [] }`, `{ logs: [] }`, `{ data: [] }`, etc.).
-
-- [x] Update `frontend/src/pages/admin/Dashboard.tsx` to harden all `.filter()` usages by guarding with `Array.isArray(...)`.
-
-- [x] Add temporary console logs before each dashboard `.filter()` call (include endpoint URL, response JSON, and `Array.isArray(value)`).
-
-- [x] Remove temporary debug logs after validating `/admin/dashboard` no longer crashes.
-
-- [x] Run the frontend and verify `/admin/dashboard` loads successfully.
-
-- [ ] `git add . && git commit -m "fix: resolve dashboard filter runtime error" && git push origin main`.
+## Email system fix (progress tracking)
+- [x] Inspect existing email implementation and call sites.
+- [x] Implement production-grade SMTP diagnostics in `backend/server/utils/email.mjs`:
+  - [x] `transporter.verify()`
+  - [x] step-by-step logging
+  - [x] explicit timeouts
+  - [x] retries with backoff
+- [x] Implement automatic Resend API fallback / migration while keeping `sendAlertEmail(alert, recipientEmail)` signature unchanged.
+- [ ] Configure Render env vars (user must set):
+  - [ ] `EMAIL_PROVIDER=resend` (recommended)
+  - [ ] `RESEND_API_KEY`
+  - [ ] `RESEND_FROM` (optional; otherwise uses SMTP_FROM)
+ - [ ] Run local smoke test:
+  - [ ] `node testEmail.mjs`
+- [ ] Verify email delivery from provider logs after deployment.
 
