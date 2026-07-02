@@ -36,8 +36,21 @@ const logLoginFailureForEmail = async (email) => {
 
 import { getToken, requireAuth } from '../middleware/auth.mjs'
 import { readBody, send } from '../utils/http.mjs'
-import { sendAlertEmail } from '../utils/email.mjs'
+import { sendAlertEmail, sendOtpEmail } from '../utils/email.mjs'
 
+export const buildOtpResponse = ({ otp, otpToken, expiresInSeconds, emailDelivery, nodeEnv = process.env.NODE_ENV || 'development' }) => {
+  const response = {
+    otpToken,
+    expiresIn: expiresInSeconds,
+    emailDelivery,
+  }
+
+  if (nodeEnv !== 'production') {
+    response.debugOtp = otp
+  }
+
+  return response
+}
 
 export const handleAuthRoutes = async ({ req, res, method, path }) => {
   if (method === 'POST' && path === '/auth/login') {
@@ -106,10 +119,28 @@ export const handleAuthRoutes = async ({ req, res, method, path }) => {
     const subject = 'Your Sentinel-Edge AI OTP Code'
     const body = `Your one-time password (OTP) is: ${otp}\n\nIt expires in 5 minutes.`
 
-    // Send OTP by email if SMTP is configured; otherwise log.
-    await sendAlertEmail({ subject, body }, recipientEmail)
+    let emailDelivery = 'sent'
+    try {
+      const emailResult = await sendAlertEmail({ subject, body }, recipientEmail)
+      if (!emailResult?.success) {
+        console.warn('[auth][login/request-otp] email delivery failed, using fallback response', {
+          to: recipientEmail,
+          error: emailResult?.error,
+          code: emailResult?.code,
+        })
+        emailDelivery = 'fallback'
+      }
+    } catch (err) {
+      console.warn('[auth][login/request-otp] email delivery exception, using fallback response', err?.message || err)
+      emailDelivery = 'fallback'
+    }
 
-    return send(res, 200, { otpToken, expiresIn: expiresInMs / 1000 })
+    return send(res, 200, buildOtpResponse({
+      otp,
+      otpToken,
+      expiresInSeconds: expiresInMs / 1000,
+      emailDelivery,
+    }))
 
   }
 
@@ -217,12 +248,20 @@ export const handleAuthRoutes = async ({ req, res, method, path }) => {
     const subject = 'Your Sentinel-Edge AI OTP Code'
     const emailBody = `Your one-time password (OTP) is: ${otp}\n\nIt expires in 5 minutes.`
 
-    await sendAlertEmail({ subject, body: emailBody }, recipientEmail)
+    let emailDelivery = 'sent'
+    try {
+      await sendOtpEmail(recipientEmail, otp)
+    } catch (err) {
+      console.warn('[auth][register] OTP email send exception, using fallback response:', err?.message || err)
+      emailDelivery = 'fallback'
+    }
 
     return send(res, 200, {
       otpToken,
       email: body.email,
       expiresIn: expiresInMs / 1000,
+      emailDelivery,
+      ...(process.env.NODE_ENV !== 'production' ? { debugOtp: otp } : {}),
     })
   }
 

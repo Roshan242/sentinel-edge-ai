@@ -67,7 +67,7 @@ export default function RegisterPage() {
               <label className="block text-xs text-gray-400 mb-1.5">Full Name</label>
               <input
                 type="text"
-                placeholder="Rohit Kumar"
+                placeholder="Your Full Name"
                 value={name}
                 onChange={e => setName(e.target.value)}
                 className={inputCls}
@@ -78,7 +78,7 @@ export default function RegisterPage() {
               <label className="block text-xs text-gray-400 mb-1.5">Email Address</label>
               <input
                 type="email"
-                placeholder="you@example.com"
+                placeholder="your@email.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 className={inputCls}
