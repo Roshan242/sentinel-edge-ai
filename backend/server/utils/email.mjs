@@ -36,6 +36,7 @@ const transporter = nodemailer.createTransport({
     user: SMTP_USER,
     pass: SMTP_PASS,
   },
+  family: 4,
 
   connectionTimeout: 60000, // 60 seconds
   greetingTimeout: 60000,   // 60 seconds
