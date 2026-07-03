@@ -28,16 +28,31 @@ export function createTransporter() {
   const SMTP_FROM = getRequiredEnv("SMTP_FROM");
 
   transporterPromise = (async () => {
-    const transporter = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_SECURE,
-      auth: { user: SMTP_USER, pass: SMTP_PASS },
-      from: SMTP_FROM,
-    });
+const transporter = nodemailer.createTransport({
+  host: SMTP_HOST,
+  port: SMTP_PORT,
+  secure: SMTP_SECURE,
+  auth: {
+    user: SMTP_USER,
+    pass: SMTP_PASS,
+  },
 
-    await transporter.verify();
-    return transporter;
+  connectionTimeout: 60000, // 60 seconds
+  greetingTimeout: 60000,   // 60 seconds
+  socketTimeout: 60000,     // 60 seconds
+
+  from: SMTP_FROM,
+});
+
+    try {
+  await transporter.verify();
+  console.log("✅ SMTP verified");
+} catch (err) {
+  console.error("❌ SMTP verify failed:", err);
+  throw err;
+}
+
+return transporter;
   })();
 
   return transporterPromise;
