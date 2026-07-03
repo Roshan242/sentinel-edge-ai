@@ -249,12 +249,19 @@ export const handleAuthRoutes = async ({ req, res, method, path }) => {
     const emailBody = `Your one-time password (OTP) is: ${otp}\n\nIt expires in 5 minutes.`
 
     let emailDelivery = 'sent'
-    try {
-      await sendOtpEmail(recipientEmail, otp)
-    } catch (err) {
-      console.warn('[auth][register] OTP email send exception, using fallback response:', err?.message || err)
-      emailDelivery = 'fallback'
-    }
+
+try {
+  await sendOtpEmail(recipientEmail, otp)
+  console.log("✅ OTP EMAIL SENT SUCCESSFULLY")
+} catch (err) {
+  console.error("❌ FULL SMTP ERROR:", err)
+  console.error("❌ MESSAGE:", err?.message)
+  console.error("❌ CODE:", err?.code)
+  console.error("❌ COMMAND:", err?.command)
+  console.error("❌ STACK:", err?.stack)
+
+  emailDelivery = 'fallback'
+}
 
     return send(res, 200, {
       otpToken,
