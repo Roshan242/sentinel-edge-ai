@@ -19,7 +19,9 @@ console.log(
 );
 
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+    host: "smtp.gmail.com",
+  port: 465,
+  secure: true, // SSL
   auth: {
     type: "OAuth2",
     user: required("SMTP_FROM_EMAIL"),
