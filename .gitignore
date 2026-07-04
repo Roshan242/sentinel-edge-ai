@@ -9,6 +9,11 @@ dist/
 .env.*
 !.env.example
 
+# Google OAuth / Gmail API
+credentials/
+client_secret*.json
+token.json
+
 # Logs
 *.log
 *.err.log

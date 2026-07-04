@@ -1,9 +1,16 @@
 import dotenv from 'dotenv'
-dotenv.config({
-  path: '.env',
-  quiet: true,
-});
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 
+// Ensure .env is loaded from backend/ regardless of the process working directory (Render starts apps from a different cwd).
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const backendDir = path.resolve(__dirname, '..')
+
+dotenv.config({
+  path: path.join(backendDir, '.env'),
+  quiet: true,
+})
 
 import http from "node:http";
 import { cameraHost } from "./data/store.mjs";
