@@ -1,6 +1,14 @@
 import { alerts, logs, settings } from '../data/store.mjs'
 
-import { adminUser, createUser, deleteUser, findUserByEmail, listUsers, updateUser } from '../data/users.mjs'
+import {
+  adminUser,
+  createSupabaseAuthUser,
+  createUser,
+  deleteSupabaseAuthUser,
+  deleteUser,
+  listUsers,
+  updateUser,
+} from '../data/users.mjs'
 import { requireAdmin } from '../middleware/auth.mjs'
 import { readBody, send } from '../utils/http.mjs'
 import { sendAlertEmail } from '../utils/email.mjs'
@@ -8,6 +16,33 @@ import { sendAlertEmail } from '../utils/email.mjs'
 // ✅ Supabase helper reuse (users.mjs me bana hua hai)
 import { supabaseRequest } from '../data/users.mjs'
 const alertsTable = process.env.SUPABASE_ALERTS_TABLE || 'alerts'
+
+const notifyAdminRecipients = async (alert) => {
+  if (!settings.emailAlerts) return
+  let recipients
+  if (process.env.ALERT_RECIPIENT_EMAIL) {
+    recipients = [process.env.ALERT_RECIPIENT_EMAIL]
+  } else {
+    try {
+      recipients = (await listUsers()).filter((user) => user.role === 'admin').map((user) => user.email)
+    } catch (error) {
+      console.warn('[admin] could not resolve admin alert recipients:', error?.message || error)
+      return
+    }
+  }
+
+  if (recipients.length === 0) {
+    console.warn('[admin] no admin email recipients configured for alert notifications')
+    return
+  }
+
+  const results = await Promise.allSettled(recipients.map((email) => sendAlertEmail(alert, email)))
+  results.forEach((result) => {
+    if (result.status === 'rejected') {
+      console.warn('[admin] alert email delivery failed:', result.reason?.message || result.reason)
+    }
+  })
+}
 
 export const handleAdminRoutes = async ({ req, res, method, path }) => {
   // --- USERS ---
@@ -20,14 +55,40 @@ export const handleAdminRoutes = async ({ req, res, method, path }) => {
   if (method === 'POST' && path === '/admin/users') {
     await requireAdmin(req)
     const body = await readBody(req)
-    if (!body.name || !body.email) return send(res, 400, { message: 'Name and email are required' })
+    if (!body.name || !body.email || !body.password) {
+      return send(res, 400, { message: 'Name, email, and password are required' })
+    }
+    if (String(body.password).length < 8) {
+      return send(res, 400, { message: 'Password must be at least 8 characters' })
+    }
 
     const existingUser = await findUserByEmail(body.email)
     if (existingUser) {
       return send(res, 409, { message: 'Email already registered' })
     }
 
-    const user = await createUser({ name: body.name, email: body.email, password: body.password || 'password123', role: body.role, status: body.status })
+    const authUser = await createSupabaseAuthUser({
+      name: body.name,
+      email: body.email,
+      password: body.password,
+    })
+    let user
+    try {
+      user = await createUser({
+        name: body.name,
+        email: body.email,
+        role: body.role,
+        status: body.status,
+        authUserId: authUser.id,
+      })
+    } catch (error) {
+      try {
+        await deleteSupabaseAuthUser(authUser.id)
+      } catch (cleanupError) {
+        console.error('[admin] failed to roll back Supabase Auth user after profile creation failed:', cleanupError)
+      }
+      throw error
+    }
     return send(res, 201, adminUser(user))
   }
 
@@ -90,17 +151,7 @@ export const handleAdminRoutes = async ({ req, res, method, path }) => {
         body: alert,
       })
 
-      // ✅ Email notification
-      if (settings.emailAlerts) {
-        const adminEmail = process.env.ALERT_RECIPIENT_EMAIL
-        if (adminEmail) {
-          sendAlertEmail(alert, adminEmail).catch(() => {})
-        } else {
-          findUserByEmail('admin@sentinel.com')
-            .then((u) => { if (u?.email) sendAlertEmail(alert, u.email) })
-            .catch(() => {})
-        }
-      }
+      void notifyAdminRecipients(alert)
 
       // ✅ Log entry
       logs.unshift({
@@ -121,16 +172,7 @@ export const handleAdminRoutes = async ({ req, res, method, path }) => {
       const fallbackAlert = { id, ...alert }
       alerts.unshift(fallbackAlert)
 
-      if (settings.emailAlerts) {
-        const adminEmail = process.env.ALERT_RECIPIENT_EMAIL
-        if (adminEmail) {
-          sendAlertEmail(alert, adminEmail).catch(() => {})
-        } else {
-          findUserByEmail('admin@sentinel.com')
-            .then((u) => { if (u?.email) sendAlertEmail(alert, u.email) })
-            .catch(() => {})
-        }
-      }
+      void notifyAdminRecipients(alert)
 
       logs.unshift({
         id: Date.now(),

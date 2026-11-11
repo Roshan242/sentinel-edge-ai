@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { GlobalLayout } from '@/components/layout/GlobalLayout'
 import { Bell, Lock, Eye } from 'lucide-react'
 import { getSettings, saveSettings, SettingsData } from '@/services/adminService'
+import { useAuth } from '@/context/AuthContext'
 
 export const AdminSettings: React.FC = () => {
   const [systemName, setSystemName] = useState('SENTINEL-EDGE AI')
@@ -9,8 +10,10 @@ export const AdminSettings: React.FC = () => {
   const [emailAlerts, setEmailAlerts] = useState(true)
   const [smsNotifications, setSmsNotifications] = useState(false)
   const [suspiciousActivityAlerts, setSuspiciousActivityAlerts] = useState(true)
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const { updatePassword } = useAuth()
 
   const handleSave = async () => {
     const settings: SettingsData = {
@@ -19,7 +22,6 @@ export const AdminSettings: React.FC = () => {
       emailAlerts,
       smsNotifications,
       suspiciousActivityAlerts,
-      twoFactorEnabled,
     }
     await saveSettings(settings)
     setInitialSettings(settings)
@@ -35,13 +37,29 @@ export const AdminSettings: React.FC = () => {
       setEmailAlerts(initialSettings.emailAlerts)
       setSmsNotifications(initialSettings.smsNotifications)
       setSuspiciousActivityAlerts(initialSettings.suspiciousActivityAlerts)
-      setTwoFactorEnabled(initialSettings.twoFactorEnabled)
       setStatusMessage('Changes canceled.')
     }
   }
 
-  const handleChangePassword = () => {
-    setStatusMessage('Password change is not available in mock mode.')
+  const handleChangePassword = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setStatusMessage('')
+    if (newPassword.length < 8) {
+      setStatusMessage('Password must be at least 8 characters.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setStatusMessage('The new passwords do not match.')
+      return
+    }
+    try {
+      await updatePassword(newPassword)
+      setNewPassword('')
+      setConfirmPassword('')
+      setStatusMessage('Password updated successfully.')
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : 'Could not update the password.')
+    }
   }
 
   useEffect(() => {
@@ -52,18 +70,11 @@ export const AdminSettings: React.FC = () => {
       setEmailAlerts(settings.emailAlerts)
       setSmsNotifications(settings.smsNotifications)
       setSuspiciousActivityAlerts(settings.suspiciousActivityAlerts)
-      setTwoFactorEnabled(settings.twoFactorEnabled)
       setInitialSettings(settings)
     }
 
     loadSettings()
   }, [])
-
-  const handleToggleTwoFactor = () => {
-    const nextValue = !twoFactorEnabled
-    setTwoFactorEnabled(nextValue)
-    setStatusMessage(`Two-factor authentication ${nextValue ? 'enabled' : 'disabled'} locally.`)
-  }
 
   return (
     <GlobalLayout>
@@ -148,18 +159,35 @@ export const AdminSettings: React.FC = () => {
               <Lock size={20} /> Security
             </h2>
             <div className="space-y-4">
-              <button
-                onClick={handleChangePassword}
-                className="w-full px-4 py-2 bg-primary-600 hover:bg-primary-700 rounded-lg font-medium transition-colors"
-              >
-                Change Password
-              </button>
-              <button
-                onClick={handleToggleTwoFactor}
-                className="w-full px-4 py-2 border border-primary-600 hover:bg-primary-600/10 rounded-lg font-medium transition-colors"
-              >
-                {twoFactorEnabled ? 'Disable Two-Factor Authentication' : 'Enable Two-Factor Authentication'}
-              </button>
+              <form onSubmit={handleChangePassword} className="space-y-3">
+                <label className="block text-sm">
+                  New password
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    minLength={8}
+                    required
+                    className="mt-2 w-full px-4 py-2 bg-dark-800 border border-dark-700 rounded-lg focus:border-primary-500 focus:outline-none"
+                  />
+                </label>
+                <label className="block text-sm">
+                  Confirm new password
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    minLength={8}
+                    required
+                    className="mt-2 w-full px-4 py-2 bg-dark-800 border border-dark-700 rounded-lg focus:border-primary-500 focus:outline-none"
+                  />
+                </label>
+                <button type="submit" className="w-full px-4 py-2 bg-primary-600 hover:bg-primary-700 rounded-lg font-medium transition-colors">
+                  Update Password
+                </button>
+              </form>
             </div>
           </div>
 

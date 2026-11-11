@@ -7,7 +7,7 @@
   "dev": "concurrently --kill-others-on-fail \"npm run backend\" \"npm run frontend\"",
   "frontend": "npm --prefix frontend run dev",
   "backend": "node backend/server/index.mjs",
-  "build": "tsc && vite build",
+  "build": "tsc -p frontend/tsconfig.json && npm --prefix frontend run build",
   "preview": "vite preview",
   "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
 },

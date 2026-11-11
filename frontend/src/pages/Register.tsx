@@ -18,16 +18,12 @@ export default function RegisterPage() {
     e.preventDefault()
     setError('')
     try {
-      const data = await register(name, email, password, 'user')
-
-      navigate('/verify-otp', {
-        state: {
-          registeredEmail: data.email,
-          otpToken: data.otpToken,
-          role: 'user',
-          otpAfterRegister: true,
-        },
-      })
+      const data = await register(name, email, password)
+      if (data.needsEmailConfirmation) {
+        navigate('/verify-email', { state: { registeredEmail: data.email } })
+      } else {
+        navigate('/user/dashboard', { replace: true })
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed. Please try again.')
     }
@@ -71,6 +67,7 @@ export default function RegisterPage() {
                 value={name}
                 onChange={e => setName(e.target.value)}
                 className={inputCls}
+                autoComplete="name"
                 required
               />
             </div>
@@ -94,6 +91,8 @@ export default function RegisterPage() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   className={inputCls + ' pr-10'}
+                  minLength={8}
+                  autoComplete="new-password"
                   required
                 />
                 <button type="button" onClick={() => setShowPassword(v => !v)}

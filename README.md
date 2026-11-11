@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js 16+ ([Download](https://nodejs.org/))
+- Node.js 20+ ([Download](https://nodejs.org/))
 - npm or yarn
 
 ## Quick Start
@@ -18,25 +18,25 @@
    npm install
    ```
 
-3. **Start Development Server**
+3. **Configure Supabase Auth**
+   - Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to `frontend/.env` (see [`frontend/.env.example`](./frontend/.env.example)).
+   - Copy `.env.example` to `backend/.env` and add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. Keep the service-role key secret and server-side only.
+   - Enable email confirmation and allow your local/production URLs ending in `/auth/callback` and `/reset-password`.
+   - Run [`migrations/2026_11_11_add_supabase_auth_profiles.sql`](./migrations/2026_11_11_add_supabase_auth_profiles.sql) in the Supabase SQL editor.
+
+4. **Start Development Server**
    ```bash
    npm run dev
    ```
-   - The app will be available at `http://localhost:3000`
+   - The app will be available at `http://localhost:5173`
 
-4. **Start Backend API**
+5. **Start Backend API**
    In a second terminal:
    ```bash
    npm run backend
    ```
    - The API runs at `http://localhost:5000`
    - Vite proxies frontend `/api/*` requests to this backend.
-
-5. **Demo Accounts**
-   ```text
-   Admin: admin@sentinel.com / password123
-   User:  user@sentinel.com / password123
-   ```
 
 6. **Build for Production**
    ```bash
@@ -73,7 +73,7 @@ sentinel-edge-ai/
 ## Features Implemented
 
 ### ✅ Frontend
-- **Authentication System** - Login/Logout with context
+- **Authentication** - Supabase Auth email/password, email confirmation, password recovery, and durable sessions
 - **Role-Based Access** - Admin vs User dashboards
 - **Responsive Design** - Mobile, tablet, desktop support
 - **Dark Theme** - Professional dark UI with Tailwind CSS
@@ -96,62 +96,9 @@ sentinel-edge-ai/
 - Access Logs (personal)
 - Account Management
 
-## Next Steps
+## Authentication
 
-### Backend Setup
-You'll need to create a backend API server (Node.js/Express or Python/FastAPI):
-
-**API Endpoints Needed:**
-```
-Authentication:
-  POST   /api/auth/login
-  POST   /api/auth/register
-  POST   /api/auth/logout
-  GET    /api/auth/me
-
-Dashboard:
-  GET    /api/dashboard/admin
-  GET    /api/dashboard/user
-
-Alerts:
-  GET    /api/alerts
-  PUT    /api/alerts/:id/read
-  DELETE /api/alerts/:id
-
-Logs:
-  GET    /api/logs/access
-  GET    /api/logs/export
-
-Cameras:
-  GET    /api/cameras
-  GET    /api/cameras/:id/feed
-
-System:
-  GET    /api/system/status
-  GET    /api/system/health
-
-Users:
-  GET    /api/users
-  POST   /api/users
-  PUT    /api/users/:id
-  DELETE /api/users/:id
-```
-
-### Real-time Updates
-- Integrate Socket.io for live feeds and alerts
-- WebSocket support for camera streams
-
-### Database
-- Set up PostgreSQL or MongoDB
-- Create schema for users, logs, alerts, cameras
-
-## Demo Credentials
-
-```
-Email: admin@sentinel.com
-Password: password123
-Role: Admin
-```
+Supabase Auth owns passwords, email confirmation, and sessions. The backend verifies each access token and reads the authorization role from the protected `public.users` profile table. Public signup creates only standard user accounts; see [`backend/server/README.md`](./backend/server/README.md) for Supabase configuration and administrator setup.
 
 ## Development Tips
 

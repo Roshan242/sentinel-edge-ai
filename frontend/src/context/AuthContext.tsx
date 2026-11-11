@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import type { Session } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
 
 interface User {
   id: string
@@ -13,259 +15,230 @@ interface AuthContextType {
   token: string | null
   isLoading: boolean
   isAuthenticated: boolean
-  login: (email: string, password: string) => Promise<void | { requiresOtp: boolean; otpToken?: string }>
-  requestOtp: (email: string) => Promise<{ otpToken: string; expiresIn: number }>
-  verifyOtp: (email: string, otpToken: string, otp: string) => Promise<void>
-  logout: () => void
-  register: (name: string, email: string, password: string, role?: 'admin' | 'user') => Promise<{ otpToken: string; email: string; expiresIn: number }>
-  syncAuthFromLocalStorage: () => void
+  login: (email: string, password: string, role: User['role']) => Promise<User>
+  register: (name: string, email: string, password: string) => Promise<{ email: string; needsEmailConfirmation: boolean }>
+  resendSignupConfirmation: (email: string) => Promise<void>
+  requestPasswordReset: (email: string) => Promise<void>
+  updatePassword: (password: string) => Promise<void>
+  refreshUser: () => Promise<void>
+  logout: () => Promise<void>
 }
 
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '/api'
+
+const requireSupabase = () => {
+  if (!supabase) {
+    throw new Error('Authentication is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.')
+  }
+  return supabase
+}
+
+const normalizeEmail = (email: string) => email.trim().toLowerCase()
+
+const getApiError = async (response: Response) => {
+  const data = await response.json().catch(() => null) as { message?: string; error?: string } | null
+  return data?.message || data?.error || `Authentication request failed (${response.status})`
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'))
-  const [user, setUser] = useState<User | null>(() => {
-    const storedUser = localStorage.getItem('user')
-    return storedUser ? (JSON.parse(storedUser) as User) : null
-  })
-  const [isLoading, setIsLoading] = useState(false)
+  const [token, setToken] = useState<string | null>(null)
+  const [user, setUser] = useState<User | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const loginInProgress = useRef(false)
+  const ignoredAuthSession = useRef<string | null>(null)
 
-  const syncFromLocalStorage = useCallback(() => {
-    const nextToken = localStorage.getItem('token')
-    const nextUserRaw = localStorage.getItem('user')
-
-    console.log('[AuthContext] syncFromLocalStorage', {
-      tokenPresent: !!nextToken,
-      userRawPresent: !!nextUserRaw,
+  const fetchProfile = useCallback(async (session: Session | null): Promise<User | null> => {
+    if (!session) return null
+    const response = await fetch(`${API_BASE_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
     })
-
-    // Allow token to exist even if user parsing is temporarily stale.
-    // ProtectedRoute should not redirect to /login during that window.
-    if (!nextToken) {
-      // Important: if token missing, we are truly logged out.
-      setToken(null)
-      setUser(null)
-      if (nextUserRaw) localStorage.removeItem('user')
-      return
-    }
-
-    if (!nextUserRaw) {
-      // Token exists but user missing -> treat as logged out and clear token.
-      setToken(null)
-      setUser(null)
-      localStorage.removeItem('token')
-      return
-    }
-
-
-    let nextUser: User | null = null
-    try {
-      nextUser = JSON.parse(nextUserRaw) as User
-    } catch {
-      nextUser = null
-      localStorage.removeItem('user')
-    }
-
-    setToken(nextToken)
-    setUser(nextUser)
-    console.log('[AuthContext] syncFromLocalStorage applied', {
-      tokenPresentAfter: !!nextToken,
-      role: (nextUser as any)?.role ?? null,
-    })
+    if (!response.ok) throw new Error(await getApiError(response))
+    const data = await response.json() as { user: User }
+    return data.user
   }, [])
 
+  const loadProfile = useCallback(async (session: Session | null): Promise<User | null> => {
+    setToken(session?.access_token ?? null)
+    const profile = await fetchProfile(session)
+    setUser(profile)
+    return profile
+  }, [fetchProfile])
 
-
-
+  const refreshUser = useCallback(async () => {
+    const { data, error } = await requireSupabase().auth.getSession()
+    if (error) throw error
+    const profile = await loadProfile(data.session)
+    if (!profile) throw new Error('No confirmed account session was returned. The confirmation link may have expired.')
+  }, [loadProfile])
 
   useEffect(() => {
-    // Hydrate once on mount from localStorage.
-    console.log('[AuthContext] mount hydrate; raw:', {
-      token: localStorage.getItem('token'),
-      userRawPresent: !!localStorage.getItem('user'),
+    let active = true
+    let revision = 0
+    const client = supabase
+
+    if (!client) {
+      setIsLoading(false)
+      return
+    }
+
+    const synchronize = async (session: Session | null) => {
+      const currentRevision = ++revision
+      setToken(session?.access_token ?? null)
+      try {
+        const profile = await fetchProfile(session)
+        if (active && currentRevision === revision) setUser(profile)
+      } catch (error) {
+        console.error('[auth] Could not load the authenticated profile:', error)
+        if (active && currentRevision === revision) {
+          setToken(null)
+          setUser(null)
+        }
+      } finally {
+        if (active && currentRevision === revision) setIsLoading(false)
+      }
+    }
+
+    const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
+      if (loginInProgress.current) {
+        ignoredAuthSession.current = session?.access_token ?? null
+        return
+      }
+      if (session?.access_token && session.access_token === ignoredAuthSession.current) return
+      if (!session) ignoredAuthSession.current = null
+      void synchronize(session)
     })
-    syncFromLocalStorage()
-  }, [syncFromLocalStorage])
 
+    void client.auth.getSession().then(({ data, error }) => {
+      if (error) throw error
+      return synchronize(data.session)
+    }).catch((error: unknown) => {
+      console.error('[auth] Could not restore the Supabase session:', error)
+      if (active) {
+        setToken(null)
+        setUser(null)
+        setIsLoading(false)
+      }
+    })
 
+    return () => {
+      active = false
+      subscription.unsubscribe()
+    }
+  }, [fetchProfile])
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '/api'
+  const login = useCallback(async (email: string, password: string, role: User['role']) => {
+    const client = requireSupabase()
+    loginInProgress.current = true
+    setIsLoading(true)
+    let session: Session | null = null
+    try {
+      const { data, error } = await client.auth.signInWithPassword({
+        email: normalizeEmail(email),
+        password,
+      })
+      if (error) throw error
+      session = data.session
+      if (!session) throw new Error('Sign-in did not return an authenticated session.')
 
-  const login = useCallback(async (email: string, password: string) => {
+      const profile = await fetchProfile(session)
+      if (!profile) throw new Error('Could not load your account profile.')
+      if (profile.role !== role) {
+        throw new Error(`This account is registered as a ${profile.role}. Choose ${profile.role} sign-in.`)
+      }
 
+      ignoredAuthSession.current = null
+      setToken(session.access_token)
+      setUser(profile)
+      return profile
+    } catch (error) {
+      if (session) {
+        ignoredAuthSession.current = session.access_token
+        const { error: signOutError } = await client.auth.signOut()
+        if (signOutError) {
+          console.error('[auth] Could not clear a rejected sign-in session:', signOutError)
+          throw new Error('Sign-in could not be completed and the session could not be cleared. Please reload and try again.')
+        }
+        setToken(null)
+        setUser(null)
+      }
+      throw error
+    } finally {
+      loginInProgress.current = false
+      setIsLoading(false)
+    }
+  }, [fetchProfile])
+
+  const register = useCallback(async (name: string, email: string, password: string) => {
     setIsLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+      const normalizedEmail = normalizeEmail(email)
+      const { data, error } = await requireSupabase().auth.signUp({
+        email: normalizedEmail,
+        password,
+        options: {
+          data: { name: name.trim() },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
       })
-
-      if (!response.ok) {
-        const text = await response.text().catch(() => '')
-        throw new Error(text || 'Login failed')
-      }
-
-      const data = (await response.json()) as
-        | { token: string; user: User }
-        | { requiresOtp: boolean; message?: string; otpToken?: string }
-
-      if ('requiresOtp' in data && data.requiresOtp) {
-        return data
-      }
-
-        // password-only login
-      if ('token' in data) {
-        console.log('[AuthContext] login success set token/user', {
-          token: data.token,
-          userRole: (data.user as any)?.role,
-        })
-        setToken(data.token)
-        setUser(data.user)
-        localStorage.setItem('token', data.token)
-        localStorage.setItem('user', JSON.stringify(data.user))
-        console.log('[AuthContext] login success localStorage now', {
-          token: localStorage.getItem('token'),
-          userRawPresent: !!localStorage.getItem('user'),
-        })
-      }
-
-      return undefined
-
+      if (error) throw error
+      if (data.session) await loadProfile(data.session)
+      return { email: normalizedEmail, needsEmailConfirmation: !data.session }
     } finally {
       setIsLoading(false)
     }
-  }, [API_BASE_URL])
+  }, [loadProfile])
+
+  const resendSignupConfirmation = useCallback(async (email: string) => {
+    const { error } = await requireSupabase().auth.resend({
+      type: 'signup',
+      email: normalizeEmail(email),
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+    })
+    if (error) throw error
+  }, [])
+
+  const requestPasswordReset = useCallback(async (email: string) => {
+    const { error } = await requireSupabase().auth.resetPasswordForEmail(normalizeEmail(email), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+    if (error) throw error
+  }, [])
+
+  const updatePassword = useCallback(async (password: string) => {
+    const { error } = await requireSupabase().auth.updateUser({ password })
+    if (error) throw error
+  }, [])
 
   const logout = useCallback(async () => {
-    try {
-      const currentToken = localStorage.getItem('token')
-      await fetch(`${API_BASE_URL}/auth/logout`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
-        },
-      })
-    } catch (err) {
-      console.warn('Logout request failed:', err)
-    } finally {
-      setUser(null)
-      setToken(null)
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-    }
-  }, [API_BASE_URL])
+    const { error } = await requireSupabase().auth.signOut()
+    if (error) throw error
+    setToken(null)
+    setUser(null)
+  }, [])
 
-  const register = useCallback(
-    async (name: string, email: string, password: string, role: 'admin' | 'user' = 'user') => {
-      setIsLoading(true)
-      try {
-        const response = await fetch(`${API_BASE_URL}/auth/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, password, role }),
-        })
+  const value = useMemo(() => ({
+    user,
+    token,
+    isLoading,
+    isAuthenticated: !!user && !!token,
+    login,
+    register,
+    resendSignupConfirmation,
+    requestPasswordReset,
+    updatePassword,
+    refreshUser,
+    logout,
+  }), [
+    user, token, isLoading, login, register, resendSignupConfirmation,
+    requestPasswordReset, updatePassword, refreshUser, logout,
+  ])
 
-        if (!response.ok) {
-          const text = await response.text().catch(() => '')
-          throw new Error(text || 'Registration failed')
-        }
-
-        const data = (await response.json()) as { otpToken: string; email: string; expiresIn: number }
-
-
-        localStorage.setItem('pendingAuthEmail', data.email)
-
-        localStorage.setItem('pendingAuthOtpToken', data.otpToken)
-        localStorage.setItem('pendingAuthOtpExpiresIn', String(data.expiresIn))
-        return data
-
-      } finally {
-        setIsLoading(false)
-      }
-    },
-    [API_BASE_URL]
-  )
-
-
-
-
-
-  const requestOtp = useCallback(
-    async (email: string) => {
-      setIsLoading(true)
-      try {
-        const response = await fetch(`${API_BASE_URL}/auth/login/request-otp`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email }),
-        })
-        if (!response.ok) throw new Error('Failed to request OTP')
-        return (await response.json()) as { otpToken: string; expiresIn: number }
-      } finally {
-        setIsLoading(false)
-      }
-    },
-    [API_BASE_URL]
-  )
-
-  const verifyOtp = useCallback(
-    async (email: string, otpToken: string, otp: string) => {
-      setIsLoading(true)
-      try {
-        const response = await fetch(`${API_BASE_URL}/auth/login/verify-otp`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, otpToken, otp }),
-        })
-
-        if (!response.ok) throw new Error('Invalid OTP')
-
-        const data = (await response.json()) as { token: string; user: User }
-
-        setToken(data.token)
-
-        setUser(data.user)
-        localStorage.setItem('token', data.token)
-        localStorage.setItem('user', JSON.stringify(data.user))
-      } finally {
-        setIsLoading(false)
-      }
-    },
-    [API_BASE_URL]
-  )
-
-
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        isLoading,
-        isAuthenticated: !!user && !!token,
-
-        login,
-        requestOtp,
-        verifyOtp,
-        logout,
-        register,
-        syncAuthFromLocalStorage: syncFromLocalStorage,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-
-  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export const useAuth = () => {
   const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider')
-  }
+  if (!context) throw new Error('useAuth must be used within AuthProvider')
   return context
 }
-

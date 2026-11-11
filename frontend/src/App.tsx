@@ -4,15 +4,17 @@ import {
   Navigate,
   RouterProvider,
   RouteObject,
-  useLocation,
 } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
+import { Toaster } from 'react-hot-toast'
 
 // Pages
 import { HomePage } from '@/pages/HomePage'
 import { LoginPage } from '@/pages/LoginPage'
 import RegisterPage from '@/pages/Register'
-import { OtpVerificationPage } from '@/pages/OtpVerificationPage'
+import { EmailConfirmationPage } from '@/pages/EmailConfirmationPage'
+import { AuthCallback } from '@/pages/AuthCallback'
+import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 
 // Admin Pages
 import { AdminDashboard } from '@/pages/admin/Dashboard'
@@ -35,15 +37,7 @@ const ProtectedRoute: React.FC<{
   children: React.ReactNode
   requiredRole?: 'admin' | 'user'
 }> = ({ children, requiredRole }) => {
-  const { isAuthenticated, user, isLoading, token } = useAuth()
-  const location = useLocation()
-
-  console.log('PROTECTED ROUTE', {
-    isAuthenticated,
-    token,
-    user,
-    pathname: location.pathname,
-  })
+  const { isAuthenticated, user, isLoading } = useAuth()
 
   if (isLoading) {
     return (
@@ -56,14 +50,7 @@ const ProtectedRoute: React.FC<{
     )
   }
 
-  // Avoid redirect loops while localStorage token is present but user state is still syncing.
-  // If token exists, allow route render and let ProtectedRoute role check handle mismatch.
   if (!isAuthenticated) {
-    // If we still have a token in storage, do not bounce to /login.
-    // Instead allow render; role mismatch will be handled after sync.
-    if (token) {
-      return <>{children}</>
-    }
     return <Navigate to="/login" replace />
   }
 
@@ -95,8 +82,16 @@ function AppRoutesRenderer() {
       element: isAuthenticated ? <Navigate to={defaultPath} replace /> : <RegisterPage />,
     },
     {
-      path: '/verify-otp',
-      element: <OtpVerificationPage />,
+      path: '/verify-email',
+      element: <EmailConfirmationPage />,
+    },
+    {
+      path: '/auth/callback',
+      element: <AuthCallback />,
+    },
+    {
+      path: '/reset-password',
+      element: <ResetPasswordPage />,
     },
 
     {
@@ -222,7 +217,7 @@ export default function App() {
   return (
     <AuthProvider>
       <AppRoutesRenderer />
+      <Toaster position="top-right" />
     </AuthProvider>
   )
 }
-

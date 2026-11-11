@@ -95,14 +95,12 @@ export const notifyAdminsForSecurityEvents = async ({
       try {
         admins = await getRegisteredAdmins()
       } catch (err) {
-        admins = []
+        console.warn('[notify-admins] could not resolve admin accounts:', err?.message || err)
       }
     }
 
     if (!admins || admins.length === 0) {
-      // Fallback recipient for dev environments when Supabase/user listing fails
-      const fallbackEmail = process.env.ADMIN_ALERT_RECIPIENT_EMAIL || process.env.ALERT_RECIPIENT_EMAIL || 'admin@sentinel.com'
-      admins = [{ email: fallbackEmail, id: 'fallback', name: 'Admin (fallback)' }]
+      console.warn('[notify-admins] no admin email recipients configured')
     }
 
     // Initialize dedup store.
@@ -153,15 +151,19 @@ export const notifyAdminsForSecurityEvents = async ({
       const subject = `[Sentinel] ${alert.title}`
       const body = `${alert.title}\n\nSeverity: ${alert.severity}\nLocation: ${alert.location}\nTime: ${alert.timestamp}\n\nDetails:\n${alert.message || event?.description || ''}`
 
-      await Promise.all(
+      const emailResults = await Promise.allSettled(
         admins
           .map((a) => a?.email)
           .filter(Boolean)
-          .map((email) => sendAlertEmail({ subject, body }, email).catch(() => {}))
+          .map((email) => sendAlertEmail({ subject, body }, email))
       )
+      emailResults.forEach((result) => {
+        if (result.status === 'rejected') {
+          console.warn('[notify-admins] email delivery failed:', result.reason?.message || result.reason)
+        }
+      })
     }
-  } catch {
-    // never throw
+  } catch (error) {
+    console.error('[notify-admins] security notification failed:', error?.message || error)
   }
 }
-

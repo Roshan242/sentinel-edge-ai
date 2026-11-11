@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { useUIStore } from '@/store/uiStore'
 import { LayoutDashboard, Video, Bell, FileText, Cpu, Users, Settings, LogOut } from 'lucide-react'
+import toast from 'react-hot-toast'
 
 const adminMenuItems = [
   { icon: LayoutDashboard, label: 'Overview', path: '/admin/dashboard' },
@@ -33,9 +34,13 @@ export const Sidebar: React.FC = () => {
   const roleLabel = user?.role === 'admin' ? 'Administrator' : 'User'
   const avatarName = encodeURIComponent(user?.name ?? 'User')
 
-  const handleLogout = () => {
-    logout()
-    navigate('/login')
+  const handleLogout = async () => {
+    try {
+      await logout()
+      navigate('/login')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not sign out')
+    }
   }
 
   return (

@@ -10,12 +10,36 @@ const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ chi
 const inputCls = "w-full bg-[#0d1117] border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-600/50"
 
 export const UserAccount: React.FC = () => {
-  const { user } = useAuth()
+  const { user, updatePassword } = useAuth()
   const [name, setName] = useState(user?.name ?? '')
   const [email] = useState(user?.email ?? '')
   const [saved, setSaved] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordMessage, setPasswordMessage] = useState('')
 
   const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2000) }
+
+  const handlePasswordUpdate = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setPasswordMessage('')
+    if (newPassword.length < 8) {
+      setPasswordMessage('Password must be at least 8 characters.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage('The new passwords do not match.')
+      return
+    }
+    try {
+      await updatePassword(newPassword)
+      setNewPassword('')
+      setConfirmPassword('')
+      setPasswordMessage('Password updated successfully.')
+    } catch (error) {
+      setPasswordMessage(error instanceof Error ? error.message : 'Could not update the password.')
+    }
+  }
 
   return (
     <GlobalLayout>
@@ -64,23 +88,36 @@ export const UserAccount: React.FC = () => {
             <div className="flex items-center gap-2 mb-4 text-sm font-semibold">
               <Shield size={15} className="text-purple-400" /> Security
             </div>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs text-gray-400 mb-1.5">Current Password</label>
-                <input type="password" placeholder="••••••••" className={inputCls} />
-              </div>
+            <form onSubmit={handlePasswordUpdate} className="space-y-3">
               <div>
                 <label className="block text-xs text-gray-400 mb-1.5">New Password</label>
-                <input type="password" placeholder="••••••••" className={inputCls} />
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={event => setNewPassword(event.target.value)}
+                  minLength={8}
+                  className={inputCls}
+                  required
+                />
               </div>
               <div>
                 <label className="block text-xs text-gray-400 mb-1.5">Confirm New Password</label>
-                <input type="password" placeholder="••••••••" className={inputCls} />
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={event => setConfirmPassword(event.target.value)}
+                  minLength={8}
+                  className={inputCls}
+                  required
+                />
               </div>
-              <button className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
+              {passwordMessage && <p className="text-xs text-gray-300">{passwordMessage}</p>}
+              <button type="submit" className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
                 Update Password
               </button>
-            </div>
+            </form>
           </Card>
         </div>
 

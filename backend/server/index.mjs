@@ -1,6 +1,7 @@
 import dotenv from 'dotenv'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import http from 'node:http'
 
 // Ensure .env is loaded from backend/ regardless of the process working directory (Render starts apps from a different cwd).
 const __filename = fileURLToPath(import.meta.url)
@@ -12,15 +13,15 @@ dotenv.config({
   quiet: true,
 })
 
-import http from "node:http";
-import { cameraHost } from "./data/store.mjs";
-import { initializeUserStore } from "./data/users.mjs";
-
-import { cameraStore } from "./data/cameras.store.mjs";
-import { checkCameraReachable } from "./utils/camerasReachability.mjs";
-
-import { routeRequest } from "./router.mjs";
-import { send } from "./utils/http.mjs";
+const [{ cameraHost }, { initializeUserStore }, { cameraStore }, { checkCameraReachable }, { routeRequest }, { send }] =
+  await Promise.all([
+    import('./data/store.mjs'),
+    import('./data/users.mjs'),
+    import('./data/cameras.store.mjs'),
+    import('./utils/camerasReachability.mjs'),
+    import('./router.mjs'),
+    import('./utils/http.mjs'),
+  ])
 
 const PORT = Number(process.env.PORT || 5000);
 const CAMERA_STATUS_INTERVAL_MS = Number(process.env.CAMERA_STATUS_INTERVAL_MS || 15000);
@@ -108,6 +109,6 @@ try {
   server.listen(PORT, () => {
     console.log(`🚀 Sentinel Edge API running at http://localhost:${PORT}`);
     console.log(`📷 Camera host: ${cameraHost}`);
-    console.log("👤 User storage: fallback mode (not configured)");
+    console.log("👤 Authentication unavailable (Supabase is not configured)");
   });
 }

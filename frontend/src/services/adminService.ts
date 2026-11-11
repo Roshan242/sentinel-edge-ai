@@ -58,7 +58,6 @@ export interface SettingsData {
   emailAlerts: boolean
   smsNotifications: boolean
   suspiciousActivityAlerts: boolean
-  twoFactorEnabled: boolean
 }
 
 export const getUsers = async (): Promise<UserItem[]> => {

@@ -98,13 +98,9 @@ const ScanLine: React.FC = () => (
   />
 )
 
-// ── Role Modal ────────────────────────────────────────────────────────────────
+// ── Sign-in modal ────────────────────────────────────────────────────────────
 const RoleModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const navigate = useNavigate()
-  const handleSelect = (role: 'admin' | 'user') => {
-    onClose()
-    navigate('/login', { state: { role, demo: true } })
-  }
 
   return (
     <AnimatePresence>
@@ -121,46 +117,46 @@ const RoleModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-          onClick={e => e.stopPropagation()}
+          onClick={event => event.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
                 <Shield size={14} className="text-white" />
               </div>
-              <h2 className="text-base font-bold text-white">Login As</h2>
+              <h2 className="text-base font-bold text-white">Sign In</h2>
             </div>
             <button
               onClick={onClose}
               className="p-1 hover:bg-white/5 rounded-lg text-gray-400 hover:text-white transition-colors"
+              aria-label="Close"
             >
               <X size={16} />
             </button>
           </div>
-          <p className="text-xs text-gray-400 mb-5">Select your role to continue</p>
+          <p className="text-xs text-gray-400 mb-5">Choose which sign-in page to continue to.</p>
           <div className="grid grid-cols-2 gap-3">
-            {[
-              { role: 'admin' as const, icon: Shield, label: 'Admin', sub: 'Full system access', color: 'blue' },
-              { role: 'user' as const, icon: User, label: 'User', sub: 'Standard access', color: 'green' },
-            ].map(({ role, icon: Icon, label, sub, color }) => (
-              <motion.button
-                key={role}
-                onClick={() => handleSelect(role)}
-                whileHover={{ scale: 1.04 }}
-                whileTap={{ scale: 0.97 }}
-                className={`flex flex-col items-center gap-3 p-5 bg-[#161b27] border border-white/10 rounded-xl hover:border-${color}-500/60 transition-all`}
-              >
-                <div className={`w-14 h-14 bg-${color}-500/10 rounded-full flex items-center justify-center`}>
-                  <Icon size={26} className={`text-${color}-400`} />
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-white">{label}</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5">{sub}</p>
-                </div>
-              </motion.button>
-            ))}
+            <button
+              onClick={() => {
+                onClose()
+                navigate('/login?role=user')
+              }}
+              className="flex flex-col items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm font-semibold text-gray-200 transition-colors hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-white"
+            >
+              <User size={22} className="text-blue-400" />
+              User
+            </button>
+            <button
+              onClick={() => {
+                onClose()
+                navigate('/login?role=admin')
+              }}
+              className="flex flex-col items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm font-semibold text-gray-200 transition-colors hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-white"
+            >
+              <Shield size={22} className="text-blue-400" />
+              Admin
+            </button>
           </div>
-          <p className="text-center text-[10px] text-gray-600 mt-4">Click outside to close</p>
         </motion.div>
       </motion.div>
     </AnimatePresence>
@@ -448,4 +444,3 @@ export const HomePage: React.FC = () => {
     </div>
   )
 }
-

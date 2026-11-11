@@ -4,7 +4,10 @@ import toast from 'react-hot-toast'
 
 export const useAlerts = () => {
   useEffect(() => {
-    const channel = supabase
+    const client = supabase
+    if (!client) return
+
+    const channel = client
       .channel('alerts-channel')
       .on(
         'postgres_changes',
@@ -24,7 +27,7 @@ export const useAlerts = () => {
       .subscribe()
 
     return () => {
-      supabase.removeChannel(channel)
+      client.removeChannel(channel)
     }
   }, [])
 }

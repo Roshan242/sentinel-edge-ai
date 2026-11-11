@@ -1,14 +1,14 @@
-import React from 'react'
-import { useLocation } from 'react-router-dom'
+import React, { useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { LoginForm } from '@/components/auth/LoginForm'
-import { Shield, ArrowRight, User } from 'lucide-react'
+import { Shield, ArrowRight, UserRound, X } from 'lucide-react'
 
 export const LoginPage: React.FC = () => {
-  const location = useLocation()
-  const state = (location.state || {}) as { role?: string; demo?: boolean }
-  const role = state.role ?? 'admin'
-  const isAdmin = role === 'admin'
-  const demo = !!state.demo
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedRole = searchParams.get('role')
+  const role = requestedRole === 'admin' || requestedRole === 'user' ? requestedRole : null
+  const [showRolePicker, setShowRolePicker] = useState(!role)
 
   return (
     <div className="min-h-screen bg-[#0a0e1a] flex items-center justify-center p-4">
@@ -17,20 +17,18 @@ export const LoginPage: React.FC = () => {
         <div className="space-y-6">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
-              {isAdmin ? <Shield size={24} className="text-white" /> : <User size={24} className="text-white" />}
+              <Shield size={24} className="text-white" />
             </div>
             <h1 className="text-3xl font-bold text-white">SENTINEL-EDGE AI</h1>
           </div>
 
           <div className="space-y-2">
-            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${isAdmin ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-green-500/10 text-green-400 border border-green-500/20'}`}>
-              {isAdmin ? <Shield size={12} /> : <User size={12} />}
-              {isAdmin ? 'Admin Access' : 'User Access'}
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              <Shield size={12} />
+              Secure Account Access
             </div>
             <h2 className="text-2xl font-semibold text-white">
-              AI-Powered Security,<br />
-              Edge Intelligence,<br />
-              Total Protection
+              Sign in to Sentinel-Edge AI
             </h2>
             <p className="text-gray-400 text-sm">
               Advanced surveillance and biometric management system with real-time threat detection.
@@ -54,34 +52,81 @@ export const LoginPage: React.FC = () => {
         {/* Right — Login Form */}
         <div className="bg-[#161b27] border border-white/5 rounded-xl p-8">
           <div className="flex items-center gap-2 mb-1">
-            {isAdmin
+            {role === 'admin'
               ? <Shield size={18} className="text-blue-400" />
-              : <User size={18} className="text-green-400" />}
-            <h3 className="text-xl font-bold text-white">
-              {isAdmin ? 'Admin Login' : 'User Login'}
-            </h3>
+              : <UserRound size={18} className="text-blue-400" />}
+            <h3 className="text-xl font-bold text-white">{role === 'admin' ? 'Admin Sign In' : 'User Sign In'}</h3>
           </div>
           <p className="text-xs text-gray-400 mb-6">
-            {isAdmin ? 'Sign in with your admin credentials' : 'Sign in with your user credentials'}
+            Sign in with your {role ?? 'selected'} account. Access is determined by the role assigned to your account.
           </p>
 
-          {import.meta.env.DEV && (
-            <div className="mb-5 rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-3 text-xs text-yellow-200">
-              <strong className="block font-semibold text-yellow-300 mb-1">Demo credentials</strong>
-          {demo && isAdmin
-                ? <><code className="text-yellow-400">admin@sentinel.com</code> / <code className="text-yellow-400">password123</code></>
-                : demo && !isAdmin
-                ? <><code className="text-yellow-400">user@sentinel.com</code> / <code className="text-yellow-400">password123</code></>
-                : isAdmin
-                ? <><code className="text-yellow-400">admin@sentinel.com</code> / <code className="text-yellow-400">password123</code></>
-                : <><code className="text-yellow-400">user@sentinel.com</code> / <code className="text-yellow-400">password123</code></>
-              }
-            </div>
+          {role ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRolePicker(true)
+                  setSearchParams({})
+                }}
+                className="mb-5 text-xs text-blue-400 hover:text-blue-300"
+              >
+                Choose a different sign-in type
+              </button>
+              <LoginForm role={role} />
+            </>
+          ) : (
+            <div className="h-[270px]" />
           )}
-
-          <LoginForm />
         </div>
       </div>
+      {showRolePicker && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sign-in-role-title"
+            className="w-full max-w-sm rounded-2xl border border-blue-500/20 bg-[#0d1117] p-6 shadow-2xl shadow-blue-500/10"
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <h2 id="sign-in-role-title" className="text-base font-bold text-white">Choose sign-in type</h2>
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="rounded p-1 text-gray-400 transition-colors hover:bg-white/5 hover:text-white"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <p className="mb-5 text-xs text-gray-400">Choose User or Admin to continue.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchParams({ role: 'user' })
+                  setShowRolePicker(false)
+                }}
+                className="flex flex-col items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm font-semibold text-gray-200 transition-colors hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-white"
+              >
+                <UserRound size={22} className="text-blue-400" />
+                User
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchParams({ role: 'admin' })
+                  setShowRolePicker(false)
+                }}
+                className="flex flex-col items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm font-semibold text-gray-200 transition-colors hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-white"
+              >
+                <Shield size={22} className="text-blue-400" />
+                Admin
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

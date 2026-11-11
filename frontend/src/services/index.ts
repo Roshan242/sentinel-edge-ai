@@ -1,15 +1,6 @@
 import apiClient from './api'
 
 export const authService = {
-  login: (email: string, password: string) =>
-    apiClient.post('/auth/login', { email, password }),
-  
-  register: (name: string, email: string, password: string) =>
-    apiClient.post('/auth/register', { name, email, password }),
-  
-  logout: () =>
-    apiClient.post('/auth/logout'),
-  
   getCurrentUser: () =>
     apiClient.get('/auth/me'),
 }

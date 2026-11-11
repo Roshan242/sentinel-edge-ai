@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { GlobalLayout } from '@/components/layout/GlobalLayout'
 import { Trash2, Edit } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { addUser, deleteUser as deleteUserService, getUsers, updateUser, UserItem } from '@/services/adminService'
 
 export const AdminUsers: React.FC = () => {
@@ -43,30 +44,44 @@ export const AdminUsers: React.FC = () => {
   }, [])
 
   const saveUser = async () => {
-    if (editingUser) {
-      const updated = await updateUser({
-        id: editingUser.id,
-        name: formName,
-        email: formEmail,
-        status: formStatus,
-        registeredDate: editingUser.registeredDate,
-      })
-      setUsers((prev) => prev.map((user) => (user.id === updated.id ? updated : user)))
-    } else {
-      const newUser = await addUser({
-        name: formName,
-        email: formEmail,
-        password: formPassword,
-        status: formStatus,
-      })
-      setUsers((prev) => [...prev, newUser])
+    try {
+      if (editingUser) {
+        const updated = await updateUser({
+          id: editingUser.id,
+          name: formName,
+          email: formEmail,
+          status: formStatus,
+          registeredDate: editingUser.registeredDate,
+        })
+        setUsers((prev) => prev.map((user) => (user.id === updated.id ? updated : user)))
+      } else {
+        if (formPassword.length < 8) {
+          toast.error('Password must be at least 8 characters')
+          return
+        }
+        const newUser = await addUser({
+          name: formName,
+          email: formEmail,
+          password: formPassword,
+          status: formStatus,
+        })
+        setUsers((prev) => [...prev, newUser])
+      }
+      closeModal()
+      toast.success(editingUser ? 'User updated' : 'User created')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not save user')
     }
-    closeModal()
   }
 
   const deleteUser = async (id: number) => {
-    await deleteUserService(id)
-    setUsers((prev) => prev.filter((user) => user.id !== id))
+    try {
+      await deleteUserService(id)
+      setUsers((prev) => prev.filter((user) => user.id !== id))
+      toast.success('User deleted')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not delete user')
+    }
   }
 
   return (
@@ -159,6 +174,8 @@ export const AdminUsers: React.FC = () => {
                     type="password"
                     value={formPassword}
                     onChange={(e) => setFormPassword(e.target.value)}
+                    minLength={8}
+                    required
                     className="w-full px-4 py-2 bg-dark-900 border border-dark-800 rounded-lg focus:border-primary-500 focus:outline-none"
                   />
                 </div>

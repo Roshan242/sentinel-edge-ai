@@ -12,15 +12,6 @@ if (existsSync('.env')) {
 
 export const cameraHost = (process.env.CAMERA_HOST || process.env.VITE_CAMERA_HOST || 'http://100.94.124.9:8080').replace(/\/+$/, '')
 
-export const sessions = new Map()
-
-// In-memory OTP store (dev-friendly). Keyed by otpToken.
-export const otpCodes = new Map()
-
-// Pending registrations until OTP verification
-export const pendingRegistrations = new Map()
-
-
 export const alerts = [
   { id: 1, title: 'Unauthorized Access Attempt', severity: 'critical', timestamp: '2 minutes ago', location: 'Main Entrance', read: false },
   { id: 2, title: 'System Warning', severity: 'warning', timestamp: '5 minutes ago', location: 'Server Room', read: false },
@@ -50,7 +41,6 @@ export const settings = {
   emailAlerts: true,
   smsNotifications: false,
   suspiciousActivityAlerts: true,
-  twoFactorEnabled: false,
 }
 
 export const nextId = (items) => (items.length ? Math.max(...items.map((item) => Number(item.id))) + 1 : 1)

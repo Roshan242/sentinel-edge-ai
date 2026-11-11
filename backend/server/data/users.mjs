@@ -1,5 +1,4 @@
 import { existsSync, readFileSync } from 'node:fs'
-import argon2 from 'argon2'
 
 if (existsSync('.env')) {
   const envFile = readFileSync('.env', 'utf8')
@@ -13,27 +12,8 @@ if (existsSync('.env')) {
 
 const supabaseUrl = (process.env.SUPABASE_URL || '').replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '')
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || ''
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 const usersTable = process.env.SUPABASE_USERS_TABLE || 'users'
-
-// --- Local/dev fallback mode ---
-// This repo historically used Supabase for user storage. If SUPABASE_* envs
-// are missing, we fall back to a simple local store so the API can boot.
-//
-// NOTE: Despite the UI/backend naming saying “MySQL”, the current code path is
-// Supabase REST. This fallback is purely to keep the app working.
-let fallbackMode = false
-const fallbackUsers = new Map() // id -> user
-const fallbackEmailIndex = new Map() // email -> id
-let fallbackNextId = 1
-
-const maybeEnableFallbackMode = () => {
-  if (!supabaseUrl || !supabaseKey) {
-    fallbackMode = true
-    console.warn('[Sentinel Edge API] Supabase config missing; using local in-memory user store (dev fallback).')
-    return true
-  }
-  return false
-}
 
 const assertSupabaseConfig = () => {
   if (!supabaseUrl || !supabaseKey) {
@@ -71,10 +51,88 @@ export const supabaseRequest = async (table, { method = 'GET', query = {}, body,
   return text ? JSON.parse(text) : null
 }
 
+export const getSupabaseAuthUser = async (accessToken) => {
+  assertSupabaseConfig()
+  const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })
+
+  if (response.status === 401 || response.status === 403) return null
+  if (!response.ok) {
+    const error = new Error(`Supabase Auth validation failed with status ${response.status}`)
+    error.statusCode = 503
+    throw error
+  }
+  return response.json()
+}
+
+const supabaseAuthAdminRequest = async (path, { method = 'GET', body } = {}) => {
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    const error = new Error('Supabase Auth administration requires SUPABASE_SERVICE_ROLE_KEY')
+    error.statusCode = 500
+    throw error
+  }
+
+  const response = await fetch(`${supabaseUrl}/auth/v1/admin/${path}`, {
+    method,
+    headers: {
+      apikey: supabaseServiceRoleKey,
+      Authorization: `Bearer ${supabaseServiceRoleKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+
+  if (!response.ok) {
+    const message = await response.text()
+    const error = new Error(message || `Supabase Auth administration failed with status ${response.status}`)
+    error.statusCode = response.status
+    throw error
+  }
+  if (response.status === 204) return null
+  const text = await response.text()
+  return text ? JSON.parse(text) : null
+}
+
+export const createSupabaseAuthUser = ({ name, email, password }) =>
+  supabaseAuthAdminRequest('users', {
+    method: 'POST',
+    body: {
+      email: normalizeEmail(email),
+      password,
+      email_confirm: true,
+      user_metadata: { name },
+    },
+  })
+
+export const updateSupabaseAuthUser = (authUserId, updates) =>
+  supabaseAuthAdminRequest(`users/${encodeURIComponent(authUserId)}`, {
+    method: 'PUT',
+    body: {
+      ...(updates.email !== undefined ? { email: normalizeEmail(updates.email), email_confirm: true } : {}),
+      ...(updates.name !== undefined ? { user_metadata: { name: updates.name } } : {}),
+    },
+  })
+
+export const deleteSupabaseAuthUser = async (authUserId) => {
+  try {
+    await supabaseAuthAdminRequest(`users/${encodeURIComponent(authUserId)}`, { method: 'DELETE' })
+  } catch (error) {
+    if (error.statusCode === 404) return
+    throw error
+  }
+}
+
+const normalizeEmail = (email) => (typeof email === 'string' ? email.trim().toLowerCase() : '')
+
 const userFromRow = (row) => ({
   id: Number(row.id),
+  authUserId: row.auth_user_id || null,
   name: row.name,
-  email: row.email,
+  email: normalizeEmail(row.email),
   password: row.password,
   role: row.role,
   status: row.status,
@@ -97,116 +155,10 @@ export const adminUser = (user) => ({
 })
 
 export const initializeUserStore = async () => {
-  // If Supabase isn't configured, enable fallback and seed demo users locally.
-  if (maybeEnableFallbackMode()) {
-    // Seed demo users for immediate usability
-    // IMPORTANT: store Argon2id hashes only.
-    const seed = [
-      { name: 'Admin', email: 'admin@sentinel.com', password: 'password123', role: 'admin', status: 'registered', registered_date: '2024-01-15' },
-      { name: 'Rohit Kumar', email: 'user@sentinel.com', password: 'password123', role: 'user', status: 'registered', registered_date: '2024-01-20' },
-    ]
-
-    for (const u of seed) {
-      const id = fallbackNextId++
-      const passwordHash = await hashPasswordArgon2id(u.password)
-      const user = userFromRow({
-        id,
-        name: u.name,
-        email: u.email,
-        password: passwordHash,
-        role: u.role,
-        status: u.status,
-        registered_date: u.registered_date,
-      })
-      fallbackUsers.set(id, user)
-      fallbackEmailIndex.set(user.email, id)
-    }
-
-    return
-  }
-
   assertSupabaseConfig()
-  await seedDemoUsers()
-}
-
-const seedDemoUsers = async () => {
-  // Seed demo users with Argon2id hashes only.
-  const adminHash = await hashPasswordArgon2id('password123')
-  const userHash = await hashPasswordArgon2id('password123')
-
-  await supabaseRequest(usersTable, {
-    method: 'POST',
-    query: { on_conflict: 'email' },
-    prefer: 'resolution=merge-duplicates',
-    body: [
-      { name: 'Admin', email: 'admin@sentinel.com', password: adminHash, role: 'admin', status: 'registered', registered_date: '2024-01-15' },
-      { name: 'Rohit Kumar', email: 'user@sentinel.com', password: userHash, role: 'user', status: 'registered', registered_date: '2024-01-20' },
-    ],
-  })
-}
-
-// Detects whether the stored `password` field is an Argon2 hash.
-// Argon2 PHC strings typically look like: $argon2id$v=19$m=...
-const isArgon2Hash = (value) => typeof value === 'string' && value.startsWith('$argon2id$')
-
-// Hash passwords using Argon2id.
-const hashPasswordArgon2id = async (password) => {
-  // Argon2id mode (argon2 package uses argon2.argon2id)
-  return argon2.hash(password, { type: argon2.argon2id })
-}
-
-// Find a user by email and verify their password.
-// Backward compatibility:
-// - If stored `password` is legacy plaintext, compare once.
-// - On successful legacy login, migrate to Argon2id hash and persist.
-export const findUserByCredentials = async (email, password) => {
-  const user = await findUserByEmail(email)
-  if (!user) return null
-
-  const stored = user.password
-  if (!stored) return null
-
-  // New path: stored Argon2id hash
-  if (isArgon2Hash(stored)) {
-    const ok = await argon2.verify(stored, password)
-    return ok ? user : null
-  }
-
-  // Legacy path: stored plaintext password
-  if (stored !== password) return null
-
-  // Migration on successful login
-  const newHash = await hashPasswordArgon2id(password)
-
-  if (fallbackMode) {
-    user.password = newHash
-    fallbackUsers.set(user.id, user)
-    return user
-  }
-
-  try {
-    await supabaseRequest(usersTable, {
-      method: 'PATCH',
-      query: { id: `eq.${user.id}` },
-      prefer: 'return=representation',
-      body: { password: newHash },
-    })
-  } catch (err) {
-    // Login should still succeed even if migration fails.
-    // Avoid leaking sensitive info.
-    console.error('[Auth] Password migration failed:', err?.message || err)
-  }
-
-  user.password = newHash
-  return user
 }
 
 export const findUserById = async (id) => {
-  if (fallbackMode) {
-    const user = fallbackUsers.get(Number(id))
-    return user || null
-  }
-
   const rows = await supabaseRequest(usersTable, {
     query: { select: '*', id: `eq.${id}`, limit: '1' },
   })
@@ -214,70 +166,49 @@ export const findUserById = async (id) => {
 }
 
 export const findUserByEmail = async (email) => {
-  if (fallbackMode) {
-    const id = fallbackEmailIndex.get(email)
-    if (!id) return null
-    return fallbackUsers.get(id) || null
-  }
+  const normalizedEmail = normalizeEmail(email)
+  if (!normalizedEmail) return null
 
   const rows = await supabaseRequest(usersTable, {
-    query: { select: '*', email: `eq.${email}`, limit: '1' },
+    query: { select: '*', email: `eq.${normalizedEmail}`, limit: '1' },
   })
   return rows[0] ? userFromRow(rows[0]) : null
 }
 
-export const createUser = async ({ name, email, password, role = 'user', status = 'registered' }) => {
-  if (fallbackMode) {
-    const existingId = fallbackEmailIndex.get(email)
-    if (existingId) {
-      const error = new Error('Email already registered')
-      error.code = 'DUPLICATE_EMAIL'
-      throw error
-    }
+export const findUserByAuthId = async (authUserId) => {
+  if (!authUserId) return null
+  const rows = await supabaseRequest(usersTable, {
+    query: { select: '*', auth_user_id: `eq.${authUserId}`, limit: '1' },
+  })
+  return rows[0] ? userFromRow(rows[0]) : null
+}
 
-    const id = fallbackNextId++
+export const attachAuthUserId = async (userId, authUserId) => {
+  const rows = await supabaseRequest(usersTable, {
+    method: 'PATCH',
+    query: { id: `eq.${userId}`, select: '*' },
+    prefer: 'return=representation',
+    body: { auth_user_id: authUserId },
+  })
+  return rows[0] ? userFromRow(rows[0]) : null
+}
 
-    const passwordHash = await hashPasswordArgon2id(password)
-
-    const user = {
-      id,
-      name,
-      email,
-      password: passwordHash,
-      role: role === 'admin' ? 'admin' : 'user',
-      status: status === 'pending' ? 'pending' : 'registered',
-      registeredDate: new Date().toISOString().slice(0, 10),
-      // keep internal password for auth matching
-      registered_date: undefined,
-    }
-
-    // match shape of userFromRow output
-    const normalized = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      password: user.password,
-      role: user.role,
-      status: user.status,
-      registeredDate: user.registeredDate,
-    }
-
-    fallbackUsers.set(id, normalized)
-    fallbackEmailIndex.set(email, id)
-    return normalized
+export const createUser = async ({ name, email, role = 'user', status = 'registered', authUserId = null }) => {
+  const normalizedEmail = normalizeEmail(email)
+  if (!normalizedEmail) {
+    throw new Error('Email is required')
   }
 
   const registeredDate = new Date().toISOString().slice(0, 10)
-  const passwordHash = await hashPasswordArgon2id(password)
   try {
     const rows = await supabaseRequest(usersTable, {
       method: 'POST',
       query: { select: '*' },
       prefer: 'return=representation',
       body: {
+        auth_user_id: authUserId,
         name,
-        email,
-        password: passwordHash,
+        email: normalizedEmail,
         role: role === 'admin' ? 'admin' : 'user',
         status: status === 'pending' ? 'pending' : 'registered',
         registered_date: registeredDate,
@@ -286,10 +217,10 @@ export const createUser = async ({ name, email, password, role = 'user', status 
     return userFromRow(rows[0])
   } catch (err) {
     const message = String(err?.message || err)
-    // Supabase/Postgres unique constraint violation on users.email
-    if (message.includes('23505') || message.includes('users_email_key') || message.includes('duplicate key value')) {
-      const error = new Error('Email already registered')
-      error.code = 'DUPLICATE_EMAIL'
+    if (message.includes('23505') || message.includes('duplicate key value')) {
+      const duplicateAuthIdentity = message.includes('auth_user_id')
+      const error = new Error(duplicateAuthIdentity ? 'Supabase identity already linked' : 'Email already registered')
+      error.code = duplicateAuthIdentity ? 'DUPLICATE_AUTH_USER' : 'DUPLICATE_EMAIL'
       throw error
     }
     throw err
@@ -297,13 +228,6 @@ export const createUser = async ({ name, email, password, role = 'user', status 
 }
 
 export const listUsers = async () => {
-  if (fallbackMode) {
-    return Array.from(fallbackUsers.values()).map((u) => ({
-      ...u,
-      registeredDate: u.registeredDate,
-    }))
-  }
-
   const rows = await supabaseRequest(usersTable, {
     query: { select: '*', order: 'id.asc' },
   })
@@ -311,46 +235,48 @@ export const listUsers = async () => {
 }
 
 export const updateUser = async (id, updates) => {
-  if (fallbackMode) {
-    const existing = fallbackUsers.get(Number(id))
-    if (!existing) return null
-
-    if (updates.name !== undefined) existing.name = updates.name
-    if (updates.email !== undefined) {
-      fallbackEmailIndex.delete(existing.email)
-      existing.email = updates.email
-      fallbackEmailIndex.set(existing.email, existing.id)
-    }
-    if (updates.status !== undefined) existing.status = updates.status
-    if (updates.role !== undefined) existing.role = updates.role
-
-    fallbackUsers.set(existing.id, existing)
-    return existing
+  const existing = await findUserById(id)
+  if (!existing) return null
+  const authIdentityChanged = existing.authUserId && (updates.email !== undefined || updates.name !== undefined)
+  if (authIdentityChanged) {
+    await updateSupabaseAuthUser(existing.authUserId, updates)
   }
 
   const body = {}
   if (updates.name !== undefined) body.name = updates.name
-  if (updates.email !== undefined) body.email = updates.email
+  if (updates.email !== undefined) body.email = normalizeEmail(updates.email)
   if (updates.status !== undefined) body.status = updates.status
   if (updates.role !== undefined) body.role = updates.role
 
-  const rows = await supabaseRequest(usersTable, {
-    method: 'PATCH',
-    query: { id: `eq.${id}`, select: '*' },
-    prefer: 'return=representation',
-    body,
-  })
-  return rows[0] ? userFromRow(rows[0]) : null
+  try {
+    const rows = await supabaseRequest(usersTable, {
+      method: 'PATCH',
+      query: { id: `eq.${id}`, select: '*' },
+      prefer: 'return=representation',
+      body,
+    })
+    if (rows[0]) return userFromRow(rows[0])
+
+    if (authIdentityChanged) {
+      await updateSupabaseAuthUser(existing.authUserId, { email: existing.email, name: existing.name })
+    }
+    return null
+  } catch (error) {
+    if (authIdentityChanged) {
+      try {
+        await updateSupabaseAuthUser(existing.authUserId, { email: existing.email, name: existing.name })
+      } catch (rollbackError) {
+        console.error('[auth] failed to roll back Supabase Auth after profile update failed:', rollbackError)
+      }
+    }
+    throw error
+  }
 }
 
 export const deleteUser = async (id) => {
-  if (fallbackMode) {
-    const existing = fallbackUsers.get(Number(id))
-    if (!existing) return false
-    fallbackUsers.delete(Number(id))
-    fallbackEmailIndex.delete(existing.email)
-    return true
-  }
+  const existing = await findUserById(id)
+  if (!existing) return false
+  if (existing.authUserId) await deleteSupabaseAuthUser(existing.authUserId)
 
   const rows = await supabaseRequest(usersTable, {
     method: 'DELETE',
@@ -361,13 +287,8 @@ export const deleteUser = async (id) => {
 }
 
 export const countRegisteredUsers = async () => {
-  if (fallbackMode) {
-    return Array.from(fallbackUsers.values()).filter((u) => u.status === 'registered').length
-  }
-
   const rows = await supabaseRequest(usersTable, {
     query: { select: 'id', status: 'eq.registered' },
   })
   return rows.length
 }
-

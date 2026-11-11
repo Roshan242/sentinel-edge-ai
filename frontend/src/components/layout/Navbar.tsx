@@ -3,6 +3,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useUIStore } from '@/store/uiStore'
 import { Bell, Search, ChevronDown, Menu, Calendar, LogOut, User } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 
 export const Navbar: React.FC = () => {
   const navigate = useNavigate()
@@ -35,10 +36,14 @@ export const Navbar: React.FC = () => {
   const roleLabel = user?.role === 'admin' ? 'Administrator' : 'User'
   const avatarName = encodeURIComponent(user?.name ?? 'User')
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setShowAdminMenu(false)
-    logout()
-    navigate('/login')
+    try {
+      await logout()
+      navigate('/login')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not sign out')
+    }
   }
 
   return (

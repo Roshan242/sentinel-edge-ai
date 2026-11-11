@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import apiClient from '@/services/api'
 import { LiveCameraFeed } from '@/components/LiveCameraFeed'
 
@@ -91,4 +91,3 @@ export default function AddCamera() {
     </div>
   )
 }
-
