@@ -8,10 +8,6 @@
 
 import { getAccessLogsWindowForAnalysis } from './source-access-logs.mjs'
 
-const safeJson = (v) => {
-  try { return JSON.parse(JSON.stringify(v)) } catch { return null }
-  }
-
 // --- Heuristic feature extraction ---
 const countByStatus = (events, keyFn) => {
   const m = new Map()
@@ -113,12 +109,10 @@ export const detectSecurityEvents = async ({
   }
 
   // Baseline / compare window.
-  let compare = []
-  try {
-    compare = await getAccessLogsWindowForAnalysis({ windowMinutes: activityCompareWindowMinutes, offsetMinutes: windowMinutes })
-  } catch {
-    compare = []
-  }
+  const compare = await getAccessLogsWindowForAnalysis({
+    windowMinutes: activityCompareWindowMinutes,
+    offsetMinutes: windowMinutes,
+  }).catch(() => [])
 
   const totalRecent = recent.length
   const totalCompare = Array.isArray(compare) ? compare.length : 0

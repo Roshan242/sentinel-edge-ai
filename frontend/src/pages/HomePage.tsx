@@ -121,8 +121,8 @@ const RoleModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         >
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
-                <Shield size={14} className="text-white" />
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                <Shield size={16} className="text-white" />
               </div>
               <h2 className="text-base font-bold text-white">Sign In</h2>
             </div>

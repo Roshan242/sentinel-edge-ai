@@ -6,6 +6,7 @@ import {
   createUser,
   deleteSupabaseAuthUser,
   deleteUser,
+  findUserByEmail,
   listUsers,
   updateUser,
 } from '../data/users.mjs'

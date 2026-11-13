@@ -1,6 +1,4 @@
-import { requireAdmin } from '../middleware/auth.mjs'
-
-import { readBody, send } from '../utils/http.mjs'
+import { send } from '../utils/http.mjs'
 import { detectSecurityEvents } from '../security/detect.mjs'
 import { upsertSecurityEvents, getSecurityEventsNewestFirst } from '../security/store-events.mjs'
 
@@ -38,7 +36,8 @@ export const handleSecurityRoutes = async ({ req, res, method, path, url }) => {
 
       // Ensure safe response shape.
       return send(res, 200, Array.isArray(stored) ? stored : [])
-    } catch (err) {
+    } catch (error) {
+      void error
       // Safe fallback: empty array.
       return send(res, 200, [])
     }
@@ -59,7 +58,8 @@ export const handleSecurityRoutes = async ({ req, res, method, path, url }) => {
       if (Array.isArray(events) && events.length > 0) {
         try {
           await upsertSecurityEvents({ events })
-        } catch {
+        } catch (persistenceError) {
+          void persistenceError
           // ignore persistence errors (fallback rule)
         }
       }
@@ -70,7 +70,8 @@ export const handleSecurityRoutes = async ({ req, res, method, path, url }) => {
         // Keep extra data minimal.
         events_detected: Array.isArray(events) ? events.length : 0,
       })
-    } catch {
+    } catch (error) {
+      void error
       return send(res, 200, { anomaly_score: 0, window_minutes: windowMinutes, events_detected: 0 })
     }
   }

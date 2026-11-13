@@ -1,6 +1,14 @@
   export const handleAlertRoutes = async ({ method, path }) => {
-  return false
-}
+    if (method === 'GET' && path === '/alerts') {
+      return false
+    }
+
+    if (method === 'POST' && path === '/alerts') {
+      return false
+    }
+
+    return false
+  }
 
 
 

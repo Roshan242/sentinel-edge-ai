@@ -58,7 +58,11 @@ const startFfmpegToMjpeg = ({ inputUrl, response, requestId }) => {
   })
 
   const onClose = () => {
-    try { ff.kill('SIGKILL') } catch {}
+    try {
+      ff.kill('SIGKILL')
+    } catch (error) {
+      void error
+    }
   }
 
   // Stop ffmpeg when client disconnects
@@ -68,7 +72,6 @@ const startFfmpegToMjpeg = ({ inputUrl, response, requestId }) => {
   let buffer = Buffer.alloc(0)
 
   // JPEG frames from image2pipe usually start with 0xFFD8 and end with 0xFFD9.
-  const isJpegStart = (b) => b === 0xff
 
   const findJpegFrames = (data) => {
     // Very small parser: find start/end markers in the stream.
@@ -118,13 +121,13 @@ const startFfmpegToMjpeg = ({ inputUrl, response, requestId }) => {
     // Keep quiet; ffmpeg warnings are not always relevant.
   })
 
-  ff.on('exit', (code) => {
+  ff.on('exit', () => {
     response.end()
     // nothing else
   })
 }
 
-export const handleCameraRoutes = async ({ req, res, method, path, url }) => {
+export const handleCameraRoutes = async ({ req, res, method, path }) => {
   if (method === 'POST' && path === '/camera/add') {
     await requireAuth(req)
 
